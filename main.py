@@ -17,10 +17,10 @@ import base64
 
 from sondehub.amateur import Uploader
 
-#MQTT_BROKER = "mqtt.meshtastic.org"
-MQTT_BROKER = "litecoin"
+MQTT_BROKER = "mqtt.meshtastic.org"
+#MQTT_BROKER = "litecoin"
 #TOPIC = "msh/US/2/e/LongFast/!1fa06c00"
-TOPIC = "msh/#"
+TOPIC = "msh/US/#"
 BALLOON_USER_IDS = (131047185, 530607104)
 
 uploader = Uploader("KD9PRC Meshtastic MQTT gateway", software_name="KD9PRC Mestastic MQTT gateway", software_version="0.0.1")
@@ -104,7 +104,11 @@ def on_message(client, userdata, msg):
                         position.altitude,
                         modulation="Meshtastic",
                         uploader_callsign=callsign,
-                        uploader_position=uploader_position,
+                        )
+                    uploader.upload_station_position(
+                        callsign,
+                        uploader_position,
+                        uploader_radio="KD9PRC Meshtastic MQTT gateway",
                         )
                     print("uploaded")
             else:
