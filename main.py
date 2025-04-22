@@ -1,6 +1,8 @@
 import base64
 import paho.mqtt.client as mqtt
 import traceback
+import threading
+import datetime
 #from meshtastic import mesh_pb2  # Meshtastic's protobuf schema
 
 from meshtastic.protobuf.mqtt_pb2 import ServiceEnvelope
@@ -13,10 +15,20 @@ import os
 import sys
 import base64
 
+from sondehub.amateur import Uploader
+
 #MQTT_BROKER = "mqtt.meshtastic.org"
 MQTT_BROKER = "litecoin"
 #TOPIC = "msh/US/2/e/LongFast/!1fa06c00"
 TOPIC = "msh/#"
+BALLOON_USER_IDS = (131047185, 530607104)
+
+uploader = Uploader("KD9PRC Meshtastic MQTT gateway")
+
+nodeinfo_db = {}
+nodeinfo_db_lock = threading.Lock()
+node_position_db = {}
+node_position_db_lock = threading.Lock()
 
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code", rc)
@@ -51,11 +63,52 @@ def on_message(client, userdata, msg):
         print(repr(mesh_packet.decoded))
         portnum = mesh_packet.decoded.portnum
         payload = mesh_packet.decoded.payload
+        from_user = int(getattr(mesh_packet, "from"))
         if portnum == PortNum.POSITION_APP:
             print("== POSITION_APP protobuf: ==")
             position = Position()
             position.ParseFromString(payload)
             print(position)
+            
+            with node_position_db_lock:
+                node_position_db[from_user] = position
+                print("Node Position DB:")
+                print(node_position_db)
+
+            if from_user in nodeinfo_db:
+                print("REPR of from_user:")
+                print(repr(from_user))
+                with nodeinfo_db_lock:
+                    user = nodeinfo_db[from_user]
+                print(f"lat/lon from {from_user}: id {user.id} long {user.long_name} lat {position.latitude_i} lon {position.longitude_i} alt {position.altitude}")
+                #if from_user == 530607104 or from_user == 131047185:
+                if int(from_user) == int(530607104):
+                    print("This is the balloon! would put it to sondehub!")
+                    latitude = position.latitude_i / 1e7
+                    longitude = position.longitude_i / 1e7
+                    uploader_position = [None,None,None]
+                    if from_user in node_position_db:
+                        with node_position_db_lock:
+                            uploader_position = [
+                                node_position_db[from_user].latitude_i / 1e7,
+                                node_position_db[from_user].longitude_i / 1e7,
+                                node_position_db[from_user].altitude
+                                ]
+                    print(f"Uploader info: {user.long_name}, pos: {uploader_position}")
+                    uploader.add_telemetry(
+                        user.long_name,
+                        datetime.datetime.utcnow(),
+                        latitude,
+                        longitude,
+                        position.altitude,
+                        modulation="Meshtastic PA",
+                        uploader_callsign=user.long_name,
+                        uploader_position=uploader_position,
+                        )
+                    print("uploaded")
+            else:
+                print(f"Not in nodeinfo_db: {from_user}")
+
         elif portnum == PortNum.TELEMETRY_APP:
             print("== TELEMETRY_APP protobuf: ==")
             telemetry = Telemetry()
@@ -66,6 +119,9 @@ def on_message(client, userdata, msg):
             user = User()
             user.ParseFromString(payload)
             print(user)
+            with nodeinfo_db_lock:
+                nodeinfo_db[from_user] = user
+
             
 
     except Exception as e:
