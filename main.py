@@ -84,15 +84,17 @@ def on_message(client, userdata, msg):
                 #if from_user == 530607104 or from_user == 131047185:
                 if int(from_user) == int(530607104):
                     print("This is the balloon! would put it to sondehub!")
+                    print("Receiver information:")
+                    receiver_id = msg.topic.split("/")[-1]
                     latitude = position.latitude_i / 1e7
                     longitude = position.longitude_i / 1e7
                     uploader_position = [None,None,None]
-                    if from_user in node_position_db:
+                    if receiver_id in node_position_db:
                         with node_position_db_lock:
                             uploader_position = [
-                                node_position_db[from_user].latitude_i / 1e7,
-                                node_position_db[from_user].longitude_i / 1e7,
-                                node_position_db[from_user].altitude
+                                node_position_db[receiver_id].latitude_i / 1e7,
+                                node_position_db[receiver_id].longitude_i / 1e7,
+                                node_position_db[receiver_id].altitude
                                 ]
                     print(f"Uploader info: {user.long_name}, pos: {uploader_position}")
                     uploader.add_telemetry(
@@ -102,7 +104,7 @@ def on_message(client, userdata, msg):
                         longitude,
                         position.altitude,
                         modulation="Meshtastic PA",
-                        uploader_callsign=user.long_name,
+                        uploader_callsign=receiver_id,
                         uploader_position=uploader_position,
                         )
                     print("uploaded")
