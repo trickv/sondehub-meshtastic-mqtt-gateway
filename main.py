@@ -98,7 +98,7 @@ def on_message(client, userdata, msg):
                     #33int(f"Uploader info: {user.long_name}, pos: {uploader_position}")
                     uploader.add_telemetry(
                         user.long_name,
-                        datetime.datetime.utcnow(),
+                        datetime.datetime.fromtimestamp(position.time),
                         latitude,
                         longitude,
                         position.altitude,
