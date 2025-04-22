@@ -23,7 +23,7 @@ MQTT_BROKER = "litecoin"
 TOPIC = "msh/#"
 BALLOON_USER_IDS = (131047185, 530607104)
 
-uploader = Uploader("KD9PRC Meshtastic MQTT gateway", software_name="KD9PRC Mestastic MQTT gateway")
+uploader = Uploader("KD9PRC Meshtastic MQTT gateway", software_name="KD9PRC Mestastic MQTT gateway", software_version="0.0.1")
 
 nodeinfo_db = {}
 nodeinfo_db_lock = threading.Lock()
@@ -53,8 +53,6 @@ def on_message(client, userdata, msg):
         decrypted_bytes = decryptor.update(getattr(mesh_packet, "encrypted")) + decryptor.finalize()
         data = Data()
         data.ParseFromString(decrypted_bytes)
-        print("Data:")
-        print(data)
         mesh_packet.decoded.CopyFrom(data)
 
         print("mesh_packet:")
@@ -72,12 +70,8 @@ def on_message(client, userdata, msg):
             
             with node_position_db_lock:
                 node_position_db[from_user] = position
-                print("Node Position DB:")
-                print(node_position_db)
 
             if from_user in nodeinfo_db:
-                print("REPR of from_user:")
-                print(repr(from_user))
                 with nodeinfo_db_lock:
                     user = nodeinfo_db[from_user]
                 print(f"lat/lon from {from_user}: id {user.id} long {user.long_name} lat {position.latitude_i} lon {position.longitude_i} alt {position.altitude}")
@@ -128,6 +122,8 @@ def on_message(client, userdata, msg):
             print(user)
             with nodeinfo_db_lock:
                 nodeinfo_db[from_user] = user
+
+        print(f"In-memory DBs: nodeinfo {len(nodeinfo_db)} position {len(node_position_db)}")
 
             
 
