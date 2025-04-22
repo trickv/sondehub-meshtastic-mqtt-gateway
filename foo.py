@@ -4,7 +4,9 @@ import traceback
 #from meshtastic import mesh_pb2  # Meshtastic's protobuf schema
 
 from meshtastic.protobuf.mqtt_pb2 import ServiceEnvelope
-from meshtastic.protobuf.mesh_pb2 import MeshPacket, Data, HardwareModel
+from meshtastic.protobuf.mesh_pb2 import MeshPacket, Data, HardwareModel, Position, User
+from meshtastic.protobuf.telemetry_pb2 import Telemetry
+from meshtastic.protobuf.portnums_pb2 import PortNum
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes # whoa make sure that guy's code is GPL or something yo
 import os
@@ -39,10 +41,32 @@ def on_message(client, userdata, msg):
         decrypted_bytes = decryptor.update(getattr(mesh_packet, "encrypted")) + decryptor.finalize()
         data = Data()
         data.ParseFromString(decrypted_bytes)
+        print("Data:")
         print(data)
         mesh_packet.decoded.CopyFrom(data)
 
+        print("mesh_packet:")
         print(mesh_packet)
+        print()
+        print(repr(mesh_packet.decoded))
+        portnum = mesh_packet.decoded.portnum
+        payload = mesh_packet.decoded.payload
+        if portnum == PortNum.POSITION_APP:
+            print("== POSITION_APP protobuf: ==")
+            position = Position()
+            position.ParseFromString(payload)
+            print(position)
+        elif portnum == PortNum.TELEMETRY_APP:
+            print("== TELEMETRY_APP protobuf: ==")
+            telemetry = Telemetry()
+            telemetry.ParseFromString(payload)
+            print(telemetry)
+        elif portnum == PortNum.NODEINFO_APP:
+            print("== NODEINFO_APP protobuf: ==")
+            user = User()
+            user.ParseFromString(payload)
+            print(user)
+            
 
     except Exception as e:
 #           print("Error decoding message:", e, file=sys.stderr)
