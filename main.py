@@ -23,7 +23,7 @@ MQTT_BROKER = "litecoin"
 TOPIC = "msh/#"
 BALLOON_USER_IDS = (131047185, 530607104)
 
-uploader = Uploader("KD9PRC Meshtastic MQTT gateway")
+uploader = Uploader("KD9PRC Meshtastic MQTT gateway", software_name="KD9PRC Mestastic MQTT gateway")
 
 nodeinfo_db = {}
 nodeinfo_db_lock = threading.Lock()
@@ -81,30 +81,35 @@ def on_message(client, userdata, msg):
                 with nodeinfo_db_lock:
                     user = nodeinfo_db[from_user]
                 print(f"lat/lon from {from_user}: id {user.id} long {user.long_name} lat {position.latitude_i} lon {position.longitude_i} alt {position.altitude}")
-                #if from_user == 530607104 or from_user == 131047185:
-                if int(from_user) == int(530607104):
-                    print("This is the balloon! would put it to sondehub!")
+                if from_user in BALLOON_USER_IDS:
+                    print("This is a balloon! put it to sondehub!")
                     print("Receiver information:")
-                    receiver_id = msg.topic.split("/")[-1]
+                    receiver_id_hex = msg.topic.split("/")[-1]
+                    receiver_id_number = int(receiver_id_hex[1:], 16)
                     latitude = position.latitude_i / 1e7
                     longitude = position.longitude_i / 1e7
                     uploader_position = [None,None,None]
-                    if receiver_id in node_position_db:
+                    if receiver_id_number in node_position_db:
                         with node_position_db_lock:
                             uploader_position = [
-                                node_position_db[receiver_id].latitude_i / 1e7,
-                                node_position_db[receiver_id].longitude_i / 1e7,
-                                node_position_db[receiver_id].altitude
+                                node_position_db[receiver_id_number].latitude_i / 1e7,
+                                node_position_db[receiver_id_number].longitude_i / 1e7,
+                                node_position_db[receiver_id_number].altitude
                                 ]
-                    print(f"Uploader info: {user.long_name}, pos: {uploader_position}")
+                    if receiver_id_number in nodeinfo_db:
+                        callsign = f"{receiver_id_hex} {nodeinfo_db[receiver_id_number].long_name}"
+                    else:
+                        callsign = receiver_id_hex
+                    print(f"Receiver info: {receiver_id_hex} {uploader_position}")
+                    #33int(f"Uploader info: {user.long_name}, pos: {uploader_position}")
                     uploader.add_telemetry(
                         user.long_name,
                         datetime.datetime.utcnow(),
                         latitude,
                         longitude,
                         position.altitude,
-                        modulation="Meshtastic PA",
-                        uploader_callsign=receiver_id,
+                        modulation="Meshtastic",
+                        uploader_callsign=callsign,
                         uploader_position=uploader_position,
                         )
                     print("uploaded")
