@@ -127,13 +127,13 @@ def on_message(client, userdata, msg):
             with nodeinfo_db_lock:
                 nodeinfo_db[from_user] = user
 
-        print(f"In-memory DBs: nodeinfo {len(nodeinfo_db)} position {len(node_position_db)}")
 
             
 
     except Exception as e:
 #           print("Error decoding message:", e, file=sys.stderr)
         print(traceback.format_exc())
+    print(f"In-memory DBs: nodeinfo {len(nodeinfo_db)} position {len(node_position_db)}")
 
 client = mqtt.Client(client_id="live-decoder2")
 client.username_pw_set("meshdev", "large4cats")
