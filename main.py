@@ -3,6 +3,7 @@ import paho.mqtt.client as mqtt
 import traceback
 import threading
 import datetime
+import time
 #from meshtastic import mesh_pb2  # Meshtastic's protobuf schema
 
 from meshtastic.protobuf.mqtt_pb2 import ServiceEnvelope
@@ -20,21 +21,30 @@ from sondehub.amateur import Uploader
 MQTT_BROKER = "mqtt.meshtastic.org"
 #MQTT_BROKER = "litecoin"
 #TOPIC = "msh/US/2/e/LongFast/!1fa06c00"
+#TOPIC = "msh/US/2/e/LongFast/#"
 TOPIC = "msh/US/#"
-BALLOON_USER_IDS = (131047185, 530607104)
+BALLOON_USER_IDS = (
+    131047185,) # mtflyer
+#    530607104) # blue
 
-uploader = Uploader("KD9PRC Meshtastic MQTT gateway", software_name="KD9PRC Mestastic MQTT gateway", software_version="0.0.1")
 
 nodeinfo_db = {}
 nodeinfo_db_lock = threading.Lock()
 node_position_db = {}
 node_position_db_lock = threading.Lock()
+node_telemetry_db = {}
+node_telemetry_db_lock = threading.Lock()
+
+total_packets = 0
+
 
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code", rc)
     client.subscribe(TOPIC)
 
 def on_message(client, userdata, msg):
+    global total_packets
+    total_packets = total_packets + 1
     try:
         print(f"\n--- New Message ---\nTopic: {msg.topic}")
         print("raw msg:")
@@ -82,7 +92,13 @@ def on_message(client, userdata, msg):
                     receiver_id_number = int(receiver_id_hex[1:], 16)
                     latitude = position.latitude_i / 1e7
                     longitude = position.longitude_i / 1e7
+                    sats_in_view = None
+                    try:
+                        sats_in_view = position.sats_in_view
+                    except AttributeError:
+                        pass
                     uploader_position = [None,None,None]
+
                     if receiver_id_number in node_position_db:
                         with node_position_db_lock:
                             uploader_position = [
@@ -96,6 +112,14 @@ def on_message(client, userdata, msg):
                         callsign = receiver_id_hex
                     print(f"Receiver info: {receiver_id_hex} {uploader_position}")
                     #33int(f"Uploader info: {user.long_name}, pos: {uploader_position}")
+                    extra_fields = None
+                    if from_user in node_telemetry_db:
+                        telemetry = node_telemetry_db[from_user]
+                        extra_fields = {
+                            'chUtil': telemetry.device_metrics['channel_utilization'],
+                            'airUtilTx': telemetry.device_metrics['air_util_tx'],
+                        }
+                        print("We have balloon telemetry")
                     uploader.add_telemetry(
                         user.long_name,
                         datetime.datetime.fromtimestamp(position.time),
@@ -104,6 +128,10 @@ def on_message(client, userdata, msg):
                         position.altitude,
                         modulation="Meshtastic",
                         uploader_callsign=callsign,
+                        snr=mesh_packet.rx_snr,
+                        rssi=mesh_packet.rx_rssi,
+                        sats=sats_in_view,
+                        extra_fields=extra_fields,
                         )
                     uploader.upload_station_position(
                         callsign,
@@ -119,6 +147,9 @@ def on_message(client, userdata, msg):
             telemetry = Telemetry()
             telemetry.ParseFromString(payload)
             print(telemetry)
+            if from_user in BALLOON_USER_IDS:
+                with node_telemetry_db_lock:
+                    node_telemetry_db[from_user] = telemetry
         elif portnum == PortNum.NODEINFO_APP:
             print("== NODEINFO_APP protobuf: ==")
             user = User()
@@ -133,12 +164,19 @@ def on_message(client, userdata, msg):
     except Exception as e:
 #           print("Error decoding message:", e, file=sys.stderr)
         print(traceback.format_exc())
-    print(f"In-memory DBs: nodeinfo {len(nodeinfo_db)} position {len(node_position_db)}")
+    print(f"In-memory DBs: nodeinfo {len(nodeinfo_db)} position {len(node_position_db)} telemetry {len(node_telemetry_db)}")
+    print(f"Total packets: {total_packets}")
 
 client = mqtt.Client(client_id="live-decoder2")
 client.username_pw_set("meshdev", "large4cats")
 client.on_connect = on_connect
 client.on_message = on_message
 
+print("Connecting to mqtt...")
 client.connect(MQTT_BROKER, 1883, 60)
+time.sleep(11)
+print("Opening connection to Sondehub...", end='')
+uploader = Uploader("KD9PRC Meshtastic MQTT gateway", software_name="KD9PRC Mestastic MQTT gateway", software_version="0.0.1")
+print("Done.")
 client.loop_forever()
+uploader.close()
