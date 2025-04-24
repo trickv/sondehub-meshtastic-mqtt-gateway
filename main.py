@@ -22,7 +22,13 @@ MQTT_BROKER = "mqtt.meshtastic.org"
 #MQTT_BROKER = "litecoin"
 #TOPIC = "msh/US/2/e/LongFast/!1fa06c00"
 #TOPIC = "msh/US/2/e/LongFast/#"
-TOPIC = "msh/US/#"
+#TOPIC = "msh/US/#"
+TOPICS = (
+    'msh/+/2/e/+/+',
+    'msh/+/+/2/e/+/+',
+    'msh/+/+/+/2/e/+/+',
+    'msh/+/+/+/+/2/e/+/+',
+    )
 BALLOON_USER_IDS = (
     131047185,) # mtflyer
 #    530607104) # blue
@@ -39,14 +45,16 @@ total_packets = 0
 
 
 def on_connect(client, userdata, flags, rc):
-    print("Connected with result code", rc)
-    client.subscribe(TOPIC)
+    print("MQTT: Connected with result code", rc)
+    for topic in TOPICS:
+        client.subscribe(topic)
+        print(f"MQTT: subscribed to {topic}")
 
 def on_message(client, userdata, msg):
     global total_packets
     total_packets = total_packets + 1
     try:
-        print(f"\n--- New Message ---\nTopic: {msg.topic}")
+        print(f"\n--- New Message ---\nTopic: {msg.topic} {datetime.datetime.now()}")
         print("raw msg:")
         print(msg.payload)
         print("end raw msg")
@@ -113,13 +121,16 @@ def on_message(client, userdata, msg):
                     print(f"Receiver info: {receiver_id_hex} {uploader_position}")
                     #33int(f"Uploader info: {user.long_name}, pos: {uploader_position}")
                     extra_fields = None
-                    if from_user in node_telemetry_db:
-                        telemetry = node_telemetry_db[from_user]
-                        extra_fields = {
-                            'chUtil': telemetry.device_metrics['channel_utilization'],
-                            'airUtilTx': telemetry.device_metrics['air_util_tx'],
-                        }
-                        print("We have balloon telemetry")
+                    try:
+                        if from_user in node_telemetry_db:
+                            telemetry = node_telemetry_db[from_user]
+                            extra_fields = {
+                                'chUtil': telemetry.device_metrics.channel_utilization,
+                                'airUtilTx': telemetry.device_metrics.air_util_tx,
+                            }
+                            print("We have balloon telemetry")
+                    except Exception:
+                        print("New code didn't work :(")
                     uploader.add_telemetry(
                         user.long_name,
                         datetime.datetime.fromtimestamp(position.time),
